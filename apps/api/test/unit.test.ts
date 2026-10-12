@@ -2,11 +2,12 @@ import { afterEach,describe,expect,it,vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { sections,type Career,type Entry,type Job } from '@career/shared';
 import { hashPassword,verifyPassword } from '../src/auth.js';
-import { analyzeJob,containsSkill,createDraft,evidenceFor,OpenAISelector,rankEvidence } from '../src/grounding.js';
+import { analyzeJob,containsSkill,createDraft,evidenceFor,OpenAISelector,rankEvidence,recommendJobs } from '../src/grounding.js';
 import { extractResume,maxResumeSize,safeFilename } from '../src/resume.js';
 import { loadConfig } from '../src/config.js';
 import { validateFields } from '../src/validation.js';
 import { table } from '../src/db.js';
+import { discoverJobs } from '../src/discovery.js';
 import { config,pdfFixture } from './helpers.js';
 const entry=(label:string,description=''):Entry=>({id:randomUUID(),label,description,organization:'',startDate:'',endDate:'',url:'',position:0,source:'user',verified:true,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
 function career():Career{return {profile:{fullName:'Name',email:'',phone:'',headline:'',summary:'I know Python (not saved as a skill)',location:''},sections:Object.fromEntries(sections.map(s=>[s,[]])) as Career['sections'],completeness:0};}
@@ -39,4 +40,12 @@ describe('resume parser',()=>{
  it('extracts an actual PDF in the isolated parser',async()=>expect(await extractResume(pdfFixture(),'resume.pdf','application/pdf')).toContain('Verified PDF Resume Python'),15000);
  it.each([['mismatch',Buffer.from('hello'),'resume.pdf','text/plain'],['empty',Buffer.alloc(0),'resume.txt','text/plain'],['binary',Buffer.from([0,1,2]),'resume.txt','text/plain'],['encoding',Buffer.from([0xff,0xfe]),'resume.txt','text/plain'],['control',Buffer.from('a\x01b'),'resume.txt','text/plain'],['signature',Buffer.from('not a PDF'),'resume.pdf','application/pdf'],['broken-pdf',Buffer.from('%PDF-1.4\nbroken\n%%EOF'),'resume.pdf','application/pdf'],['size',Buffer.alloc(maxResumeSize+1),'resume.txt','text/plain'],['unsupported',Buffer.from('hello'),'resume.docx','application/msword']])('rejects %s',async(_label,bytes,filename,mime)=>{await expect(extractResume(bytes as Buffer,filename as string,mime as string)).rejects.toThrow();});
  it('strips traversal and header characters from filenames',()=>expect(safeFilename('../../folder\\evil"\r\n.txt')).toBe('evil___.txt'));
+});
+describe('personalized job recommendations',()=>{
+ it('ranks saved roles by exact verified skill evidence and explains gaps',()=>{const c=career();c.sections.skills=[entry('Python'),entry('Docker')];const strong=job('Required Python and Docker experience. React is preferred.');strong.title='Backend Engineer';const weak=job('Required React and Kubernetes experience.');weak.title='Frontend Engineer';const result=recommendJobs([weak,strong],c);expect(result[0]?.job.id).toBe(strong.id);expect(result[0]?.matchedSkills).toEqual(['Python','Docker']);expect(result[0]?.missingSkills).toContain('React');expect(result[0]?.reasons[0]).toContain('2 required');});
+});
+describe('external job discovery boundary',()=>{
+ it('normalizes and ranks SerpApi results using profile skills without treating them as profile evidence',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({jobs_results:[{job_id:'job-1',title:'TypeScript Engineer',company_name:'Example',location:'Remote',description:'Build TypeScript software.',apply_options:[{link:'https://example.test/apply'}]}]}),{status:200})));const c=career();c.sections.skills=[entry('TypeScript')];const result=await discoverJobs({...config(),SERPAPI_KEY:'test-key'},c,'frontend');expect(result[0]).toMatchObject({externalId:'job-1',title:'TypeScript Engineer',company:'Example',location:'Remote',url:'https://example.test/apply',description:'Build TypeScript software.',source:'serpapi',score:100,matchedSkills:['TypeScript']});});
+ it('fails closed when no provider key is configured',async()=>{await expect(discoverJobs(config(),career(),'engineer')).rejects.toMatchObject({code:'JOB_SEARCH_NOT_CONFIGURED'});});
+ it('treats an empty optional provider key as disabled',()=>expect(loadConfig({...process.env,NODE_ENV:'test',DATABASE_URL:'postgresql://unused@127.0.0.1/unused',JWT_SECRET:config().JWT_SECRET,WEB_ORIGINS:'http://localhost:5173',SERPAPI_KEY:''}).SERPAPI_KEY).toBeUndefined());
 });

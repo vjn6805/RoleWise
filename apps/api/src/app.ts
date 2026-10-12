@@ -34,8 +34,8 @@ export async function buildApp(config:Config,options:{pool?:pg.Pool;selector?:Ev
   if(!['GET','HEAD','OPTIONS'].includes(request.method)&&request.url.startsWith('/api/')&&!extension){if(!origin||!config.origins.includes(origin)||request.headers['sec-fetch-site']==='cross-site')fail(403,'CSRF_REJECTED','A trusted web origin is required');}
  });
  authRoutes(app,pool,config);
- careerRoutes(app,pool,options.selector??(config.AI_BASE_URL?new OpenAISelector(config):undefined));
- app.get('/api/health',async()=>({status:'ok'}));
+  careerRoutes(app,pool,options.selector??(config.AI_BASE_URL?new OpenAISelector(config):undefined),config);
+  app.get('/api/health',async()=>({status:'ok'}));
  app.get('/api/ready',async(_r,reply)=>{try{await pool.query('SELECT 1 FROM schema_migrations LIMIT 1');return {status:'ok'};}catch{return reply.code(503).send({error:{code:'NOT_READY',message:'Database is unavailable or not migrated',requestId:_r.id}});}});
  const webRoot=fileURLToPath(new URL('../../web/dist/',import.meta.url));
  if(existsSync(webRoot)){await app.register(staticFiles,{root:webRoot,prefix:'/',index:false});app.setNotFoundHandler((request,reply)=>{if(request.method==='GET'&&!request.url.startsWith('/api/')&&request.headers.accept?.includes('text/html'))return reply.type('text/html').sendFile('index.html');return reply.code(404).send({error:{code:'NOT_FOUND',message:'Route not found',requestId:request.id}});});}else app.setNotFoundHandler((r,reply)=>reply.code(404).send({error:{code:'NOT_FOUND',message:'Route not found',requestId:r.id}}));

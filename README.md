@@ -154,6 +154,15 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 The application does not require an external AI provider for local development. Its deterministic grounding provider works without `AI_BASE_URL` or `AI_API_KEY`.
 
+External job search is optional. To enable the **Recommended jobs → Search jobs** flow, add a SerpApi key:
+
+```dotenv
+SERPAPI_KEY=your-serpapi-key
+SERPAPI_URL=https://serpapi.com/search.json
+```
+
+Without this key, local job discovery still works through manually pasted descriptions and the browser extension. The server does not fetch arbitrary job URLs, which avoids SSRF and uncontrolled website scraping.
+
 ### 5. Apply database migrations
 
 ```powershell
@@ -187,6 +196,26 @@ http://localhost:5173
 
 The Vite development server proxies `/api` requests to the API on port `4000`.
 
+## End-to-end local workflow
+
+1. Create or update your career profile at **Career profile**.
+2. Upload resume versions at **Resumes** and review extracted suggestions.
+3. Open **Recommended jobs**.
+4. Search external jobs if `SERPAPI_KEY` is configured, or capture a job with the browser extension.
+5. Review the external title, company, description, and URL.
+6. Explicitly save the job to your workspace.
+7. Open the saved job and run **Analyze job**.
+8. Review required skills, preferred skills, verified matches, and gaps.
+9. Click **Track application**.
+10. Select a resume version, stage, application date, follow-up date, and notes.
+11. Update the application stage as the process progresses.
+12. Open the application detail page for history and interview preparation.
+13. Use the extension on the employer page to capture visible fields.
+14. Edit and select proposed values, then confirm autofill.
+15. Review the employer page and submit manually.
+
+Application tracking is a workspace record; it does not submit anything to an employer.
+
 ## Quick start with Docker Compose
 
 Docker Compose starts PostgreSQL and the production application together. Docker Desktop must be running.
@@ -202,6 +231,8 @@ WEB_ORIGINS=http://localhost:4000
 EXTENSION_ORIGINS=
 TRUST_PROXY=false
 APP_PORT=4000
+SERPAPI_KEY=
+SERPAPI_URL=https://serpapi.com/search.json
 ```
 
 Use letters and numbers for `POSTGRES_PASSWORD` to avoid connection-URL escaping problems.

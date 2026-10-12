@@ -39,6 +39,8 @@ services:
       WEB_ORIGINS: ${WEB_ORIGINS:?Set the public HTTPS web origin}
       EXTENSION_ORIGINS: ${EXTENSION_ORIGINS:-}
       TRUST_PROXY: ${TRUST_PROXY:-false}
+      SERPAPI_KEY: ${SERPAPI_KEY:-}
+      SERPAPI_URL: ${SERPAPI_URL:-https://serpapi.com/search.json}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
       interval: 15s

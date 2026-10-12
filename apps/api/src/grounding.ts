@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { sections,type Career,type Evidence,type Analysis,type Job,type Draft } from '@career/shared';
+import { sections,type Career,type Evidence,type Analysis,type Job,type Draft,type JobRecommendation } from '@career/shared';
 import { id } from './db.js';
 import type { Config } from './config.js';
 export const skillDictionary=['JavaScript','TypeScript','Python','Java','C++','C#','Go','Rust','Ruby','PHP','SQL','PostgreSQL','MySQL','MongoDB','Redis','React','Vue','Angular','Next.js','Node.js','Fastify','Express','Django','Flask','Spring','HTML','CSS','Tailwind','GraphQL','REST','Docker','Kubernetes','AWS','Azure','GCP','Git','Linux','CI/CD','Terraform','Figma','Excel','Tableau','Power BI','Pandas','NumPy','TensorFlow','PyTorch','Machine learning','Data analysis','Project management','Communication','Leadership','Agile','Scrum','Testing','Accessibility'];
@@ -19,6 +19,10 @@ export function analyzeJob(job:Job,career:Career):Analysis{
  const missingSkills=[...requiredSkills,...preferredSkills].filter(s=>!matchedSkills.includes(s));
  const evidence=evidenceFor(career).filter(e=>e.section==='skills'&&matchedSkills.some(s=>e.label.trim().toLowerCase()===s.toLowerCase()));
  return {id:id(),jobId:job.id,requiredSkills,preferredSkills,responsibilities:lines.filter(s=>/responsib|you will|you’ll|duties|develop|build|maintain|design/i.test(s)).slice(0,12),qualifications:lines.filter(s=>/degree|bachelor|master|qualificat|certific|diploma/i.test(s)).slice(0,12),experienceRequirements:lines.filter(s=>/\b\d+\+?\s*(?:years?|yrs?)\b|experience (?:in|with)/i.test(s)).slice(0,12),keywords:[...requiredSkills,...preferredSkills],matchedSkills,missingSkills,evidence,interpretation:'Keyword extraction from untrusted job text, not a hiring prediction. Required/preferred classification is heuristic. Matches require an exact manually saved skill label; missing means not documented, not necessarily absent.',source:'deterministic',createdAt:new Date().toISOString()};
+}
+export function recommendJobs(jobs:Job[],career:Career):JobRecommendation[]{
+ const savedSkills=new Set(career.sections.skills.map(skill=>skill.label.toLowerCase()));
+ return jobs.map(job=>{const analysis=analyzeJob(job,career);const required=analysis.requiredSkills.length;const preferred=analysis.preferredSkills.length;const requiredMatched=analysis.requiredSkills.filter(skill=>savedSkills.has(skill.toLowerCase()));const preferredMatched=analysis.preferredSkills.filter(skill=>savedSkills.has(skill.toLowerCase()));const total=required+preferred;const score=total?Math.round((requiredMatched.length*70/Math.max(required,1)+preferredMatched.length*30/Math.max(preferred,1))):0;const reasons=[requiredMatched.length?`${requiredMatched.length} required skill match${requiredMatched.length===1?'':'es'}`:'No exact required-skill evidence yet',preferredMatched.length?`${preferredMatched.length} preferred skill match${preferredMatched.length===1?'':'es'}`:'No preferred-skill evidence yet'];return {job,score:Math.min(100,score),matchedSkills:[...requiredMatched,...preferredMatched],missingSkills:analysis.missingSkills,reasons};}).sort((a,b)=>b.score-a.score||b.job.createdAt.localeCompare(a.job.createdAt));
 }
 export interface EvidenceSelector {select(question:string,evidence:Evidence[]):Promise<string[]>;}
 export class OpenAISelector implements EvidenceSelector {
