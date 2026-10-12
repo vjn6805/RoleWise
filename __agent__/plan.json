@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "items": [
+    {
+      "title": "Inspect tooling and establish architecture, shared contracts, and milestones",
+      "status": "done"
+    },
+    {
+      "title": "Implement PostgreSQL API, security, career workflows, and grounded assistance",
+      "status": "in-progress"
+    },
+    {
+      "title": "Implement polished marketing site and authenticated web workspace",
+      "status": "pending"
+    },
+    {
+      "title": "Implement native side-panel extension and reviewed field filling",
+      "status": "pending"
+    },
+    {
+      "title": "Integrate surfaces and run security, API, frontend, extension, and end-to-end tests",
+      "status": "pending"
+    },
+    {
+      "title": "Audit production readiness and finish deployment documentation",
+      "status": "pending"
+    }
+  ],
+  "updated_at": "2026-09-30T08:14:15.852Z",
+  "session_id": "01a0f15d-3f7f-7262-8010-dcc3349c7806"
+}

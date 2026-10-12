@@ -1,0 +1,85 @@
+name: Verify career workspace
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: career
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: career_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U career -d career_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://career:ci-only-password@localhost:5432/career_test
+      TEST_DATABASE_URL: postgresql://career:ci-only-password@localhost:5432/career_test
+      E2E_DATABASE_URL: postgresql://career:ci-only-password@localhost:5432/career_e2e
+      JWT_SECRET: ci-only-jwt-secret-not-for-production-0123456789
+      WEB_ORIGINS: http://localhost:5173
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Create separate E2E database
+        run: node --input-type=module -e "import pg from 'pg'; const c = new pg.Client({connectionString:process.env.DATABASE_URL}); await c.connect(); await c.query('CREATE DATABASE career_e2e'); await c.end();"
+      - run: npm run db:migrate
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm exec playwright install --with-deps chromium
+      - name: Browser and unpacked extension integration tests
+        run: xvfb-run --auto-servernum npm run test:e2e
+      - name: Validate production image and migration boot
+        run: |
+          docker build -t career-copilot:ci .
+          docker run -d --name career-production --network host \
+            -e NODE_ENV=production -e HOST=127.0.0.1 -e PORT=4500 \
+            -e DATABASE_URL="$E2E_DATABASE_URL" -e JWT_SECRET="$JWT_SECRET" \
+            -e WEB_ORIGINS=https://careers.example.test career-copilot:ci
+          ready=0
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent http://127.0.0.1:4500/api/ready; then ready=1; break; fi
+            sleep 2
+          done
+          docker logs career-production
+          test "$ready" = 1
+          curl --fail --silent -H 'Accept: text/html' http://127.0.0.1:4500/app/profile | grep -q '<div id="root"'
+          curl --fail --silent http://127.0.0.1:4500/downloads/career-copilot-extension.zip -o /tmp/extension.zip
+          unzip -t /tmp/extension.zip
+      - name: Stop production smoke container
+        if: always()
+        run: docker rm -f career-production || true
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-diagnostics
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Upload manual-install extension
+        uses: actions/upload-artifact@v4
+        with:
+          name: career-copilot-extension
+          path: apps/web/dist/downloads/career-copilot-extension.zip
+          if-no-files-found: error

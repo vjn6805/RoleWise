@@ -1,0 +1,36 @@
+import {readFileSync} from 'node:fs';
+import {beforeEach,describe,expect,it,vi} from 'vitest';
+const mocks=vi.hoisted(()=>({request:vi.fn(),session:vi.fn(),logout:vi.fn(),capture:vi.fn(),fill:vi.fn(),configure:vi.fn()}));
+vi.mock('../src/api',()=>({Api:class {base='http://localhost:4000/api';init=async()=>{};session=mocks.session;request=mocks.request;logout=mocks.logout;configure=mocks.configure;login=async()=>{};webUrl=(path:string)=>'http://localhost:4000'+path;}}));
+vi.mock('../src/browser',()=>({capturePage:mocks.capture,fillPage:mocks.fill}));
+const career={profile:{fullName:'Alex River',email:'alex@example.test',phone:'',headline:'',summary:'',location:''},sections:{skills:[],links:[]}};
+const captured={tabId:4,documentId:'doc',capture:{token:'review',url:'https://jobs.example.test/role',title:'Software engineer',company:'Acme',location:'Remote',description:'Build reliable software with TypeScript.',fields:[{id:'name-field',label:'Full name',kind:'text',autocomplete:'name',value:'',options:[]},{id:'email-field',label:'Email',kind:'email',autocomplete:'email',value:'',options:[]}]}};
+const el=<T extends HTMLElement=HTMLElement>(id:string)=>document.getElementById(id) as T;
+const click=(id:string)=>el(id).click();
+const submit=(id:string)=>el(id).dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));
+async function capture(){click('capture');await vi.waitFor(()=>expect(document.querySelectorAll('.field')).toHaveLength(2));}
+beforeEach(async()=>{
+  vi.resetModules();vi.clearAllMocks();
+  document.documentElement.innerHTML=readFileSync('panel.html','utf8');
+  vi.stubGlobal('chrome',{runtime:{id:'test-extension'}});
+  mocks.session.mockResolvedValue({user:{fullName:'Alex',email:'alex@example.test'}});
+  mocks.request.mockImplementation(async(path:string)=>path==='/profile'?career:[]);
+  mocks.capture.mockResolvedValue(structuredClone(captured));mocks.fill.mockResolvedValue(1);mocks.logout.mockResolvedValue(undefined);
+  await import('../src/panel');await vi.waitFor(()=>expect(mocks.request).toHaveBeenCalledWith('/applications'));
+});
+describe('accessible panel review and confirmation flow',()=>{
+  it('does not capture on startup or changing sections',()=>{document.querySelector<HTMLButtonElement>('[data-tab="fill"]')!.click();expect(mocks.capture).not.toHaveBeenCalled();expect(mocks.fill).not.toHaveBeenCalled();});
+  it('starts all proposals unchecked, editable and backed by profile values',async()=>{await capture();expect(el<HTMLInputElement>('choose-name-field').checked).toBe(false);expect(el<HTMLInputElement>('choose-email-field').checked).toBe(false);expect(document.querySelector<HTMLInputElement>('[aria-label="Proposed value for Full name"]')!.value).toBe('Alex River');expect(mocks.fill).not.toHaveBeenCalled();});
+  it('requires explicit selection then confirmation, and sends only the edited selection',async()=>{
+    await capture();click('fill');await vi.waitFor(()=>expect(el('status').textContent).toContain('Select at least one'));expect(mocks.fill).not.toHaveBeenCalled();
+    click('choose-name-field');const value=document.querySelector<HTMLInputElement>('[aria-label="Proposed value for Full name"]')!;value.value='Alex Reviewed';value.dispatchEvent(new Event('input'));
+    click('fill');expect(el('fill-confirm').hidden).toBe(false);expect(mocks.fill).not.toHaveBeenCalled();
+    click('confirm-fill');await vi.waitFor(()=>expect(mocks.fill).toHaveBeenCalledWith(captured,[{id:'name-field',value:'Alex Reviewed'}],undefined));expect(el('fill-confirm').hidden).toBe(true);expect(document.querySelectorAll('.field')).toHaveLength(0);
+  });
+  it('cancel and edited proposals invalidate confirmation',async()=>{await capture();click('choose-name-field');click('fill');click('cancel-fill');expect(el('fill-confirm').hidden).toBe(true);click('confirm-fill');await vi.waitFor(()=>expect(el('status').textContent).toContain('review the confirmation'));expect(mocks.fill).not.toHaveBeenCalled();click('fill');document.querySelector<HTMLInputElement>('[aria-label="Proposed value for Full name"]')!.dispatchEvent(new Event('input'));expect(el('fill-confirm').hidden).toBe(true);});
+  it('discards review even if a stale page fill is rejected',async()=>{mocks.fill.mockRejectedValueOnce(new Error('Active tab changed. Capture and review again.'));await capture();click('choose-name-field');click('fill');click('confirm-fill');await vi.waitFor(()=>expect(el('status').textContent).toContain('Active tab changed'));expect(el('fill-confirm').hidden).toBe(true);expect(el<HTMLButtonElement>('fill').disabled).toBe(true);});
+  it('renders malicious DOM labels as literal text, never markup',async()=>{const malicious=structuredClone(captured);malicious.capture.fields[0]!.label='<img src=x onerror="globalThis.pwned=true">';mocks.capture.mockResolvedValueOnce(malicious);await capture();expect(el('fields').querySelector('img')).toBeNull();expect(el('fields').textContent).toContain('<img src=x');expect((globalThis as unknown as Record<string,unknown>).pwned).toBeUndefined();});
+  it('saves only reviewed job text and enables grounded analysis',async()=>{await capture();el<HTMLInputElement>('job-title').value='Reviewed role';mocks.request.mockResolvedValueOnce({id:'job-1',...captured.capture,title:'Reviewed role'});submit('job-form');await vi.waitFor(()=>expect(mocks.request).toHaveBeenCalledWith('/jobs',expect.objectContaining({title:'Reviewed role',description:captured.capture.description})));await vi.waitFor(()=>expect(el<HTMLButtonElement>('analyze').disabled).toBe(false));expect(el('assistant-context').textContent).toContain('Reviewed role');});
+  it('displays grounded drafts and citations as text without inserting them',async()=>{mocks.request.mockResolvedValueOnce({answer:'<b>Verified answer</b>',warnings:['Missing evidence'],source:'deterministic',evidence:[{id:'skill-1',section:'skills',label:'TypeScript',excerpt:'Verified skill'}]});el<HTMLTextAreaElement>('question').value='What skills do I have?';submit('answer-form');await vi.waitFor(()=>expect(el('answer').textContent).toContain('Verified skill'));expect(el('answer').querySelector('b')).toBeNull();expect(el('answer').textContent).toContain('Missing evidence');expect(mocks.fill).not.toHaveBeenCalled();expect(mocks.request).toHaveBeenCalledWith('/assist/answer',{question:'What skills do I have?'});});
+  it('clears private review state when logout fails and preserves honest error',async()=>{await capture();mocks.logout.mockImplementationOnce(async()=>{mocks.session.mockResolvedValue(null);throw new Error('Signed out locally. Server revocation could not be confirmed.');});click('logout');await vi.waitFor(()=>expect(el('status').textContent).toContain('revocation could not be confirmed'));expect(el('connected').hidden).toBe(true);expect(el('account').hidden).toBe(false);expect(document.querySelectorAll('.field')).toHaveLength(0);expect(el<HTMLInputElement>('job-title').value).toBe('');});
+});

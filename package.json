@@ -1,0 +1,15 @@
+{
+  "name": "career-copilot", "version": "1.0.0", "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev -w @career/api\" \"npm run dev -w @career/web\"",
+    "build": "npm run build -w @career/shared && npm run build -w @career/api && npm run build -w @career/web && npm run build -w @career/extension && node scripts/package-extension.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "playwright test",
+    "db:migrate": "npm run db:migrate -w @career/api",
+    "start": "npm run start -w @career/api"
+  },
+  "devDependencies": {"@playwright/test":"^1.58.2", "archiver":"^7.0.1", "concurrently":"^9.2.1", "typescript":"^5.9.3", "vitest":"^3.2.4", "@types/node":"^22.19.0"},
+  "engines": {"node": ">=22.16.0"}
+}

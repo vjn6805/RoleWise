@@ -1,0 +1,44 @@
+import Fastify from 'fastify';
+import cookie from '@fastify/cookie';
+import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
+import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
+import staticFiles from '@fastify/static';
+import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { ZodError } from 'zod';
+import type pg from 'pg';
+import { type Config } from './config.js';
+import { createPool,fail,HttpError } from './db.js';
+import { authRoutes } from './auth.js';
+import { careerRoutes } from './routes.js';
+import { OpenAISelector,type EvidenceSelector } from './grounding.js';
+export async function buildApp(config:Config,options:{pool?:pg.Pool;selector?:EvidenceSelector;logger?:boolean}={}){
+ const pool=options.pool??createPool(config.DATABASE_URL);
+ const app=Fastify({logger:options.logger===false?false:{level:'info',redact:['req.headers.authorization','req.headers.cookie','res.headers.set-cookie'],serializers:{req:(r:any)=>({method:r.method,url:r.url?.split('?')[0],remoteAddress:r.ip}),res:(r:any)=>({statusCode:r.statusCode})}},bodyLimit:1024*1024,trustProxy:config.TRUST_PROXY==='true',genReqId:()=>randomUUID(),requestIdHeader:false,requestTimeout:30000});
+ app.setErrorHandler((error,request,reply)=>{let status=500,code='INTERNAL_ERROR',message='An unexpected error occurred';if(error instanceof ZodError){status=400;code='VALIDATION_ERROR';message=error.issues.map(i=>`${i.path.join('.')||'request'}: ${i.message}`).join('; ').slice(0,1000);}else if(error instanceof HttpError){status=error.statusCode;code=error.code;message=error.message;}else if((error as any).code==='23503'){status=409;code='RESOURCE_CHANGED';message='A referenced resource changed; refresh and try again';}else if((error as any).code==='22008'||(error as any).code==='22007'){status=400;code='VALIDATION_ERROR';message='Invalid calendar date';}else if((error as any).statusCode>=400&&(error as any).statusCode<500){status=(error as any).statusCode;code=status===429?'RATE_LIMITED':status===413?'FILE_SIZE':'INVALID_REQUEST';message=status===429?'Too many requests; try again later':status===413?'Request or file is too large':'Invalid request';}if(status>=500)request.log.error({requestId:request.id,errorCode:(error as any).code??'unknown'},'Request failed');reply.status(status).send({error:{code,message,requestId:request.id}});});
+ await app.register(helmet,{contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'",'data:'],connectSrc:["'self'"],objectSrc:["'none'"],frameAncestors:["'none'"],baseUri:["'self'"],formAction:["'self'"],upgradeInsecureRequests:config.NODE_ENV==='production'?[]:null}},hsts:config.NODE_ENV==='production'});
+ await app.register(cors,{origin:(origin,cb)=>cb(null,!origin||[...config.origins,...config.extensionOrigins].includes(origin)),credentials:true,methods:['GET','POST','PUT','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','Authorization','X-Client']});
+ await app.register(cookie);
+ await app.register(jwt,{secret:config.JWT_SECRET,sign:{iss:'career-copilot',aud:'career-copilot'},verify:{allowedIss:'career-copilot',allowedAud:'career-copilot',algorithms:['HS256']}});
+ await app.register(rateLimit,{max:180,timeWindow:'1 minute'});
+ await app.register(multipart);
+ app.addHook('onRequest',async(request,reply)=>{reply.header('X-Request-ID',request.id);if(request.url.startsWith('/api/'))reply.header('Cache-Control','no-store');
+  const origin=request.headers.origin;const extension=request.headers['x-client']==='extension';
+  if(request.headers['x-client']!==undefined&&!extension)fail(400,'INVALID_CLIENT','Unknown client mode');
+  if(origin&&![...config.origins,...config.extensionOrigins].includes(origin))fail(403,'ORIGIN_DENIED','Request origin is not allowed');
+  if(extension&&origin&&!config.extensionOrigins.includes(origin))fail(403,'ORIGIN_DENIED','Extension mode requires an allowed extension origin');
+  if(!['GET','HEAD','OPTIONS'].includes(request.method)&&request.url.startsWith('/api/')&&!extension){if(!origin||!config.origins.includes(origin)||request.headers['sec-fetch-site']==='cross-site')fail(403,'CSRF_REJECTED','A trusted web origin is required');}
+ });
+ authRoutes(app,pool,config);
+ careerRoutes(app,pool,options.selector??(config.AI_BASE_URL?new OpenAISelector(config):undefined));
+ app.get('/api/health',async()=>({status:'ok'}));
+ app.get('/api/ready',async(_r,reply)=>{try{await pool.query('SELECT 1 FROM schema_migrations LIMIT 1');return {status:'ok'};}catch{return reply.code(503).send({error:{code:'NOT_READY',message:'Database is unavailable or not migrated',requestId:_r.id}});}});
+ const webRoot=fileURLToPath(new URL('../../web/dist/',import.meta.url));
+ if(existsSync(webRoot)){await app.register(staticFiles,{root:webRoot,prefix:'/',index:false});app.setNotFoundHandler((request,reply)=>{if(request.method==='GET'&&!request.url.startsWith('/api/')&&request.headers.accept?.includes('text/html'))return reply.type('text/html').sendFile('index.html');return reply.code(404).send({error:{code:'NOT_FOUND',message:'Route not found',requestId:request.id}});});}else app.setNotFoundHandler((r,reply)=>reply.code(404).send({error:{code:'NOT_FOUND',message:'Route not found',requestId:r.id}}));
+ if(!options.pool)app.addHook('onClose',async()=>{await pool.end();});
+ return app;
+}

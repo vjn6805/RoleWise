@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Career Copilot",
+  "version": "1.0.0",
+  "description": "Capture jobs, review verified evidence, and explicitly fill selected application fields. Never submits applications.",
+  "permissions": ["activeTab", "scripting", "storage", "sidePanel"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "background": {"service_worker": "background.js", "type": "module"},
+  "action": {"default_title": "Open Career Copilot"},
+  "side_panel": {"default_path": "panel.html"},
+  "content_security_policy": {"extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'"}
+}

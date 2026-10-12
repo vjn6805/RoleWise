@@ -1,0 +1,6 @@
+{
+  "name": "@career/extension", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": {"build":"node build.mjs", "typecheck":"tsc --noEmit", "test":"vitest run"},
+  "dependencies": {"@career/shared":"1.0.0"},
+  "devDependencies": {"@types/chrome":"^0.0.300", "esbuild":"^0.25.0", "jsdom":"^26.1.0", "vitest":"^3.2.4", "typescript":"^5.9.3"}
+}

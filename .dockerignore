@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+.git
+.omnirush
+.local
+__agent__
+.env
+.env.*
+!.env.example
+coverage
+playwright-report
+test-results
+apps/web/public/downloads/*.zip
+*.log
