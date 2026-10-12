@@ -1,0 +1,5 @@
+.resume-review-modal{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:24px;background:#1d2d2455;overflow:auto}
+.resume-review-dialog{width:min(720px,100%);max-height:min(90vh,900px);overflow:auto;background:var(--canvas);border:1px solid var(--border);border-radius:12px;box-shadow:0 24px 80px #1d2d2433;padding:24px}
+.resume-review-dialog .inset-form{margin-top:0}
+.resume-review-dialog h3{margin-top:0}
+@media(max-width:640px){.resume-review-modal{padding:12px}.resume-review-dialog{max-height:94vh;padding:18px}}

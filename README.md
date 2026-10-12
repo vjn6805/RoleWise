@@ -11,7 +11,7 @@ The application never automatically submits a job application.
 ## Current capabilities
 
 - Career profile with personal details, experience, projects, skills, certifications, achievements, links, and structured education.
-- Resume upload for PDF and UTF-8 TXT files up to 5 MiB.
+- Resume upload for PDF, DOCX, and UTF-8 TXT files up to 5 MiB.
 - Resume text extraction and reviewable suggestions for:
   - Name, email, and phone.
   - LinkedIn, GitHub, and other links.
@@ -25,10 +25,12 @@ The application never automatically submits a job application.
   - Dates and passing year.
   - Percentage or CGPA.
 - Job storage and job-description analysis.
+- Profile-backed job recommendations and optional SerpApi Google Jobs discovery.
 - Evidence-grounded assistant drafts.
 - Application tracking and interview preparation.
 - Analytics and account export.
 - Chrome/Edge Manifest V3 extension for reviewed field autofill.
+- Explicit post-submission confirmation from the extension, synchronized to the application tracker.
 - Explicit review before profile changes or extension autofill.
 
 ## Technology stack
@@ -154,6 +156,44 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 The application does not require an external AI provider for local development. Its deterministic grounding provider works without `AI_BASE_URL` or `AI_API_KEY`.
 
+## Intelligent resume parsing
+
+After upload, RoleWise calls its backend parser endpoint. With `RESUME_AI_PROVIDER=apilayer`, the backend sends the original resume file to APILayer; that provider receives the resume content. The deterministic and optional Gemini/OpenAI-compatible text parsers remain available when selected explicitly. The UI receives editable suggestions for the fields the selected parser actually returns.
+
+The parser never writes directly to the career profile. Every suggestion must be reviewed and explicitly saved by the user. APILayer suggestions are accepted only when their values can be checked against the extracted resume text and pass shared validation. Unsupported fields stay in the extracted text for manual review.
+
+### APILayer resume parser (optional)
+
+Subscribe to the Resume Parser API at [APILayer](https://apilayer.com/marketplace/resume_parser-api). Rotate any key that has been posted publicly. Put the **replacement** key only in the root `.env`:
+
+```dotenv
+RESUME_AI_PROVIDER=apilayer
+APILAYER_API_KEY=your-new-apilayer-key
+```
+
+Restart `npm run dev`, then upload a PDF or DOCX file under **Resumes**. APILayer supports PDF and Word resumes, not TXT; TXT uploads remain available for manual review or the other parsers. RoleWise sends the stored original file from the backend to APILayer's `/resume_parser/upload` endpoint as `application/octet-stream`; the browser never sees the provider key. Existing PDF/DOCX resumes can be parsed using **Parse again**. The parser label should read `apilayer`. Provider errors (key/subscription, quota, network, response) are shown as errors; uploads remain stored so you can retry without uploading again. APILayer's sample response contains name, email, skills, education and experience; it does **not** supply project bullets, certifications, professional links or full descriptions in that schema. Those stay in extracted text for manual review rather than being invented.
+
+### Recommended optional provider
+
+Gemini is a practical low-cost/free-tier option for development, but quotas and model availability vary by account, region, and time. Do not assume unlimited usage. Configure it only on the backend:
+
+```dotenv
+RESUME_AI_PROVIDER=gemini
+GEMINI_API_KEY=your-gemini-key
+GEMINI_MODEL=gemini-3.1-flash-lite
+```
+
+For Groq or another OpenAI-compatible provider:
+
+```dotenv
+RESUME_AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_API_KEY=your-provider-key
+AI_MODEL=your-structured-output-model
+```
+
+For Gemini and OpenAI-compatible parsing, an unavailable provider or invalid structured response falls back to the deterministic parser with a warning. APILayer reports these failures as errors so a failed provider request cannot look like a successful parse. No fake profile data is generated.
+
 External job search is optional. To enable the **Recommended jobs → Search jobs** flow, add a SerpApi key:
 
 ```dotenv
@@ -162,6 +202,10 @@ SERPAPI_URL=https://serpapi.com/search.json
 ```
 
 Without this key, local job discovery still works through manually pasted descriptions and the browser extension. The server does not fetch arbitrary job URLs, which avoids SSRF and uncontrolled website scraping.
+
+RoleWise calls SerpApi from the backend using the `google_jobs` engine. The user query is combined with verified profile skills, and the saved profile location is sent as the provider location when available. General `engine=google` searches and local-business results are not used as job listings.
+
+Never paste a provider key into source code, the browser console, the extension, screenshots, GitHub, or chat. If a key is exposed, revoke it in the provider dashboard and create a replacement before continuing.
 
 ### 5. Apply database migrations
 
@@ -213,6 +257,8 @@ The Vite development server proxies `/api` requests to the API on port `4000`.
 13. Use the extension on the employer page to capture visible fields.
 14. Edit and select proposed values, then confirm autofill.
 15. Review the employer page and submit manually.
+
+If you submit from the employer page, return to the extension and click **I submitted this application**. This explicitly records the application as `Applied` in RoleWise. Autofill alone never changes the application to Applied.
 
 Application tracking is a workspace record; it does not submit anything to an employer.
 

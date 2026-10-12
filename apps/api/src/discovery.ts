@@ -6,9 +6,8 @@ function text(value:unknown,max=50000){return typeof value==='string'?value.trim
 export async function discoverJobs(config:Config,career:Career,query:string):Promise<JobSearchResult[]>{
  if(!config.SERPAPI_KEY)fail(503,'JOB_SEARCH_NOT_CONFIGURED','Configure SERPAPI_KEY to search external job listings. You can still capture jobs with the browser extension or save them manually.');
  const skillQuery=career.sections.skills.slice(0,8).map(skill=>skill.label).join(' ');
- const location=career.profile.location?` in ${career.profile.location}`:'';
- const q=[query.trim(),skillQuery,location].filter(Boolean).join(' ').slice(0,300);
- const url=new URL(config.SERPAPI_URL);url.searchParams.set('engine','google_jobs');url.searchParams.set('q',q);url.searchParams.set('api_key',config.SERPAPI_KEY);url.searchParams.set('num','20');
+ const q=[query.trim(),skillQuery].filter(Boolean).join(' ').slice(0,300);
+ const url=new URL(config.SERPAPI_URL);url.searchParams.set('engine','google_jobs');url.searchParams.set('q',q);if(career.profile.location)url.searchParams.set('location',career.profile.location);url.searchParams.set('api_key',config.SERPAPI_KEY);url.searchParams.set('num','20');
  const response=await fetch(url,{signal:AbortSignal.timeout(10000),headers:{accept:'application/json'}});if(!response.ok)fail(502,'JOB_SEARCH_UNAVAILABLE','The configured job search provider is unavailable.');
  const body=await response.json() as {jobs_results?:unknown[]};if(!Array.isArray(body.jobs_results))return [];
  const skills=career.sections.skills.map(skill=>skill.label).filter(Boolean);

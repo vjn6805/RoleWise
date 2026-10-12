@@ -1,7 +1,10 @@
 import { createRequire } from 'node:module';
 import { Worker } from 'node:worker_threads';
 import { fail } from './db.js';
+import { createRequire as createDocxRequire } from 'node:module';
 const require=createRequire(import.meta.url);
+const docxRequire=createDocxRequire(import.meta.url);
+const mammoth=docxRequire('mammoth') as {extractRawText(input:{buffer:Buffer}):Promise<{value:string}>};
 const parserPath=require.resolve('pdf-parse/lib/pdf-parse.js');
 let activeParsers=0;
 // Untrusted PDFs run off the request thread with a wall-clock and worker heap budget.
@@ -22,5 +25,6 @@ export async function extractResume(bytes:Buffer,filename:string,mime:string){if
  const ext=filename.toLowerCase().split('.').pop();
  if(ext==='txt'&&mime==='text/plain') {if(bytes.includes(0))fail(400,'INVALID_FILE','Invalid text file');let text:string;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{fail(400,'INVALID_FILE','TXT files must use UTF-8 encoding');}if(/[\x01-\x08\x0b\x0c\x0e-\x1f]/.test(text))fail(400,'INVALID_FILE','Binary content is not a text resume');return text.slice(0,100000);}
   if(ext==='pdf'&&mime==='application/pdf') {if(bytes.subarray(0,5).toString()!=='%PDF-'||!bytes.subarray(-2048).includes(Buffer.from('%%EOF')))fail(400,'INVALID_FILE','Invalid PDF signature');try{return await parsePdf(bytes);}catch(error){if((error as {statusCode?:number}).statusCode===429)throw error;const fallback=[...bytes.toString('latin1').matchAll(/\(([^()\\]*(?:\\.[^()\\]*)*)\)\s*Tj/g)].map(match=>match[1]!.replace(/\\([\\()])/g,'$1')).join(' ').trim();if(fallback)return fallback.slice(0,100000);fail(400,'INVALID_FILE','PDF could not be read within safe limits; use an unencrypted PDF or UTF-8 TXT');}}
- fail(415,'UNSUPPORTED_FILE','Only PDF or UTF-8 TXT resumes are supported; filename and MIME type must agree');
+  if(ext==='docx'&&mime==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){try{const result=await mammoth.extractRawText({buffer:bytes});const text=result.value.replace(/\u0000/g,'').slice(0,100000);if(!text.trim())fail(400,'INVALID_FILE','DOCX resume did not contain readable text');return text;}catch{fail(400,'INVALID_FILE','DOCX could not be read; use a valid unencrypted DOCX, PDF, or UTF-8 TXT resume');}}
+  fail(415,'UNSUPPORTED_FILE','Only PDF, DOCX, or UTF-8 TXT resumes are supported; filename and MIME type must agree');
 }

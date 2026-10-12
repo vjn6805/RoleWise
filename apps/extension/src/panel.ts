@@ -46,7 +46,7 @@ function applicationForJob(){return applications.find(a=>a.jobId===selectedJob?.
 function renderApplication() {
   const existing=applicationForJob();input('stage').value=existing?.stage ?? 'Saved';input('application-notes').value=existing?.notes ?? '';input('follow-up').value=existing?.followUpAt ?? '';
   $('application-context').textContent=selectedJob?`${existing?'Tracking':'Start tracking'}: ${selectedJob.title}`:'Select a saved opportunity to track it.';
-  $<HTMLButtonElement>('save-application').disabled=!selectedJob;$('save-application').textContent=existing?'Update application':'Save application';
+  $<HTMLButtonElement>('save-application').disabled=!selectedJob;$<HTMLButtonElement>('confirm-submission').disabled=!existing;$('save-application').textContent=existing?'Update application':'Save application';
 }
 function renderJobs() {
   const select=$<HTMLSelectElement>('saved-jobs');select.replaceChildren(new Option('Choose an opportunity',''));
@@ -87,7 +87,8 @@ function renderFields() {
   }
   $<HTMLButtonElement>('fill').disabled=false;
 }
-for(const stage of stages)$<HTMLSelectElement>('stage').add(new Option(stage,stage));
+ const confirmationButton=document.createElement('button');confirmationButton.id='confirm-submission';confirmationButton.type='button';confirmationButton.className='secondary';confirmationButton.textContent='I submitted this application';confirmationButton.disabled=true;$('application-form').append(confirmationButton);const confirmationHint=text('p','This only records your explicit confirmation. The extension never clicks Submit or infers success from autofill.','hint');$('application-form').append(confirmationHint);
+ for(const stage of stages)$<HTMLSelectElement>('stage').add(new Option(stage,stage));
 for(const button of document.querySelectorAll<HTMLButtonElement>('[data-tab]'))button.addEventListener('click',()=>{for(const tab of document.querySelectorAll<HTMLButtonElement>('[data-tab]')){const active=tab===button;tab.setAttribute('aria-pressed',String(active));$(`tab-${tab.dataset.tab}`).hidden=!active;}});
 listen('settings-toggle','click',()=>{$('settings').hidden=!$('settings').hidden;$('settings-toggle').setAttribute('aria-expanded',String(!$('settings').hidden));});
 listen('settings-form','submit',async()=>{await api.configure(input('api-base').value);links();resetReview();await loadAccount();showStatus('Backend permission saved. Your API must allowlist the extension origin shown above.');});
@@ -107,13 +108,14 @@ listen('saved-jobs','change',async()=>{
   try{const analysis=await api.request<Analysis>(`/jobs/${jobId}/analysis`);if(epoch===accountEpoch && selectedJob?.id===jobId)renderAnalysis(analysis);}catch(error){$('analysis').append(text('p','No current analysis loaded. Run an analysis to compare this job with your verified profile.','hint'));showStatus(error instanceof Error?error.message:'Could not load analysis.',true);}
 });
 listen('analyze','click',async()=>{if(!selectedJob)throw new Error('Save or select an opportunity first.');const epoch=accountEpoch,jobId=selectedJob.id;showStatus('Comparing job requirements with verified evidence…');const analysis=await api.request<Analysis>(`/jobs/${jobId}/analyze`,{});if(epoch!==accountEpoch || selectedJob?.id!==jobId)return;renderAnalysis(analysis);showStatus('Analysis ready. Matches are supported by your saved profile, not inferred experience.');});
-listen('application-form','submit',async()=>{
+ listen('application-form','submit',async()=>{
   if(!selectedJob)throw new Error('Select a saved opportunity first.');
   const epoch=accountEpoch,existing=applicationForJob();const data=applicationSchema.parse({jobId:selectedJob.id,stage:input('stage').value,notes:input('application-notes').value,followUpAt:input('follow-up').value});
   const app=existing?await api.request<Application>(`/applications/${existing.id}`,{stage:data.stage,notes:data.notes,followUpAt:data.followUpAt},'PATCH'):await api.request<Application>('/applications',data);
   if(epoch!==accountEpoch)return;
   applications=applications.filter(a=>a.id!==app.id);applications.unshift(app);renderApplication();showStatus('Application tracker saved. Nothing was submitted to an employer.');
-});
+ });
+ listen('confirm-submission','click',async()=>{if(!selectedJob)throw new Error('Select a saved opportunity first.');const existing=applicationForJob();if(!existing)throw new Error('Save the application tracker entry before confirming submission.');const epoch=accountEpoch;const confirmed=await api.request<Application>(`/applications/${existing.id}/confirm-submission`,{appliedAt:new Date().toISOString().slice(0,10)});if(epoch!==accountEpoch)return;applications=applications.map(application=>application.id===confirmed.id?confirmed:application);renderApplication();showStatus('Submission confirmation recorded. Review the dashboard for the updated application stage.');});
 listen('answer-form','submit',async()=>{
   const question=input('question').value.trim();if(!question)throw new Error('Enter a question.');showStatus('Finding verified evidence…');
   const epoch=accountEpoch,jobId=selectedJob?.id;
