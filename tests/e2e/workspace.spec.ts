@@ -7,9 +7,9 @@ const password = 'A-real-e2e-password-2026!';
 async function addEntry(page: Page, section: string, label: string, description: string) {
   const region = page.locator('section').filter({ has: page.getByRole('heading', { name: new RegExp(`^${section}\\b`, 'i') }) });
   await region.getByRole('button', { name: /^Add / }).click();
-  await region.getByLabel('Label / title', { exact: true }).fill(label);
-  await region.getByLabel('Description / evidence', { exact: true }).fill(description);
-  await region.getByRole('button', { name: 'Save verified entry' }).click();
+  await region.getByLabel(section === 'skills' ? 'Skill name' : section === 'experience' ? 'Job title' : 'Title', { exact: true }).fill(label);
+  if (section !== 'skills') await region.getByLabel('Description / evidence', { exact: true }).fill(description);
+  await region.getByRole('button', { name: section === 'skills' ? 'Save skill' : `Save ${section}` }).click();
   await expect(region.getByRole('heading', { name: label, exact: true })).toBeVisible();
 }
 

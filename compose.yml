@@ -41,10 +41,6 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
       SERPAPI_KEY: ${SERPAPI_KEY:-}
       SERPAPI_URL: ${SERPAPI_URL:-https://serpapi.com/search.json}
-      RESUME_AI_PROVIDER: ${RESUME_AI_PROVIDER:-none}
-      APILAYER_API_KEY: ${APILAYER_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-gpt-4o-mini}

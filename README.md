@@ -4,7 +4,7 @@ RoleWise is a personal Career Operating System for managing verified career info
 
 The product is designed around one important rule:
 
-> Resume text and AI suggestions are untrusted reference material until the user reviews and saves them as verified profile data.
+> Resume text is untrusted reference material. Profile data becomes verified only after the user saves it manually.
 
 The application never automatically submits a job application.
 
@@ -12,17 +12,13 @@ The application never automatically submits a job application.
 
 - Career profile with personal details, experience, projects, skills, certifications, achievements, links, and structured education.
 - Resume upload for PDF, DOCX, and UTF-8 TXT files up to 5 MiB.
-- Resume text extraction and reviewable suggestions for:
-  - Name, email, and phone.
-  - LinkedIn, GitHub, and other links.
-  - Education and qualification details.
-  - Skills, projects, experience, certifications, and achievements.
+- Resume text extraction for manual reference.
 - Structured education fields:
   - Qualification type such as 10th, 12th/HSC, Diploma, Bachelor’s, Master’s, and Doctorate.
   - Institution or college.
   - Board or university.
   - Specialization.
-  - Dates and passing year.
+  - Start and end dates.
   - Percentage or CGPA.
 - Job storage and job-description analysis.
 - Profile-backed job recommendations and optional SerpApi Google Jobs discovery.
@@ -156,44 +152,6 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 The application does not require an external AI provider for local development. Its deterministic grounding provider works without `AI_BASE_URL` or `AI_API_KEY`.
 
-## Intelligent resume parsing
-
-After upload, RoleWise calls its backend parser endpoint. With `RESUME_AI_PROVIDER=apilayer`, the backend sends the original resume file to APILayer; that provider receives the resume content. The deterministic and optional Gemini/OpenAI-compatible text parsers remain available when selected explicitly. The UI receives editable suggestions for the fields the selected parser actually returns.
-
-The parser never writes directly to the career profile. Every suggestion must be reviewed and explicitly saved by the user. APILayer suggestions are accepted only when their values can be checked against the extracted resume text and pass shared validation. Unsupported fields stay in the extracted text for manual review.
-
-### APILayer resume parser (optional)
-
-Subscribe to the Resume Parser API at [APILayer](https://apilayer.com/marketplace/resume_parser-api). Rotate any key that has been posted publicly. Put the **replacement** key only in the root `.env`:
-
-```dotenv
-RESUME_AI_PROVIDER=apilayer
-APILAYER_API_KEY=your-new-apilayer-key
-```
-
-Restart `npm run dev`, then upload a PDF or DOCX file under **Resumes**. APILayer supports PDF and Word resumes, not TXT; TXT uploads remain available for manual review or the other parsers. RoleWise sends the stored original file from the backend to APILayer's `/resume_parser/upload` endpoint as `application/octet-stream`; the browser never sees the provider key. Existing PDF/DOCX resumes can be parsed using **Parse again**. The parser label should read `apilayer`. Provider errors (key/subscription, quota, network, response) are shown as errors; uploads remain stored so you can retry without uploading again. APILayer's sample response contains name, email, skills, education and experience; it does **not** supply project bullets, certifications, professional links or full descriptions in that schema. Those stay in extracted text for manual review rather than being invented.
-
-### Recommended optional provider
-
-Gemini is a practical low-cost/free-tier option for development, but quotas and model availability vary by account, region, and time. Do not assume unlimited usage. Configure it only on the backend:
-
-```dotenv
-RESUME_AI_PROVIDER=gemini
-GEMINI_API_KEY=your-gemini-key
-GEMINI_MODEL=gemini-3.1-flash-lite
-```
-
-For Groq or another OpenAI-compatible provider:
-
-```dotenv
-RESUME_AI_PROVIDER=openai-compatible
-AI_BASE_URL=https://api.groq.com/openai/v1
-AI_API_KEY=your-provider-key
-AI_MODEL=your-structured-output-model
-```
-
-For Gemini and OpenAI-compatible parsing, an unavailable provider or invalid structured response falls back to the deterministic parser with a warning. APILayer reports these failures as errors so a failed provider request cannot look like a successful parse. No fake profile data is generated.
-
 External job search is optional. To enable the **Recommended jobs → Search jobs** flow, add a SerpApi key:
 
 ```dotenv
@@ -243,7 +201,7 @@ The Vite development server proxies `/api` requests to the API on port `4000`.
 ## End-to-end local workflow
 
 1. Create or update your career profile at **Career profile**.
-2. Upload resume versions at **Resumes** and review extracted suggestions.
+2. Upload resume versions at **Resumes** and review the extracted text as a manual reference.
 3. Open **Recommended jobs**.
 4. Search external jobs if `SERPAPI_KEY` is configured, or capture a job with the browser extension.
 5. Review the external title, company, description, and URL.
@@ -424,19 +382,15 @@ Log in using the same account as the web application.
 
 The extension does not click Submit, bypass CAPTCHA, bypass anti-bot controls, or apply to jobs automatically.
 
-## Resume parsing workflow
+## Resume storage workflow
 
 1. Start the web app.
 2. Open the profile or resume area.
-3. Upload a PDF or UTF-8 TXT resume.
-4. Review the extracted text.
-5. Review suggested contact details.
-6. Edit and save profile details if they are accurate.
-7. Review each suggested education or career entry.
-8. Edit the fields, including qualification, board, percentage, CGPA, dates, or institution.
-9. Save only the facts you can verify.
+3. Upload a PDF, DOCX, or UTF-8 TXT resume.
+4. Review the extracted text if useful.
+5. Add accurate profile details manually from the **Career profile** page.
 
-Resume extraction never silently overwrites the authoritative profile. Suggestions remain untrusted until you explicitly save them.
+Resume extraction never changes the authoritative profile.
 
 ## Common commands
 

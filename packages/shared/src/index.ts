@@ -4,6 +4,7 @@ export const sections = ['education','experience','projects','skills','certifica
 export type Section = typeof sections[number];
 export const educationQualificationTypes = ['10th','12th/HSC','Diploma','Certificate','Associate','Bachelor’s','Master’s','Doctorate','College','Other'] as const;
 export const educationBoards = ['CBSE','ICSE','ISC','Maharashtra State Board','Karnataka State Board','Tamil Nadu State Board','Kerala State Board','Gujarat State Board','Rajasthan State Board','Uttar Pradesh State Board','West Bengal State Board','Telangana State Board','Andhra Pradesh State Board','Madhya Pradesh State Board','IB','Cambridge','University','Autonomous University','Other'] as const;
+export const linkTypes = ['LinkedIn','GitHub','GitLab','Portfolio','Personal website','Stack Overflow','Medium','Kaggle','Behance','Dribbble','Pinterest','X / Twitter','YouTube','Facebook','Instagram','Threads','Reddit','Discord','Linktree','Other'] as const;
 export const safeUrl = z.string().max(2048).refine(v => !v || /^https?:\/\//i.test(v), 'Use an HTTP or HTTPS URL').default('');
 export const profileSchema = z.object({ fullName: z.string().max(160).default(''), email: z.union([z.string().email(),z.literal('')]).default(''), phone:z.string().max(50).default(''), headline:z.string().max(200).default(''), summary:z.string().max(5000).default(''), location:z.string().max(200).default('') }).strict();
 const date = z.string().refine(v => !v || /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)), 'Use YYYY-MM-DD').default('');
@@ -11,7 +12,7 @@ export const entrySchema = z.object({ label:z.string().trim().min(1).max(200), o
 export type Profile = z.infer<typeof profileSchema>;
 export type EntryInput = z.infer<typeof entrySchema>;
 export type Entry = EntryInput & {id:string; createdAt:string; updatedAt:string; source:'user'; verified:true};
-export const educationSchema = z.object({qualificationType:z.enum(educationQualificationTypes),institution:z.string().trim().min(1).max(200),board:z.string().max(120).default(''),specialization:z.string().max(200).default(''),startDate:date,endDate:date,passingYear:z.number().int().min(1900).max(2100).nullable().default(null),percentage:z.number().min(0).max(100).nullable().default(null),cgpa:z.number().min(0).max(10).nullable().default(null),url:safeUrl,position:z.number().int().min(0).max(10000).default(0)}).strict().refine(v=> !v.startDate || !v.endDate || v.endDate >= v.startDate,{message:'End date must not precede start date',path:['endDate']}).refine(v=>!(v.percentage!==null&&v.cgpa!==null),{message:'Use percentage or CGPA, not both'});
+export const educationSchema = z.object({qualificationType:z.enum(educationQualificationTypes),institution:z.string().trim().min(1).max(200),board:z.string().max(120).default(''),specialization:z.string().max(200).default(''),startDate:date,endDate:date,percentage:z.number().min(0).max(100).nullable().default(null),cgpa:z.number().min(0).max(10).nullable().default(null),url:safeUrl,position:z.number().int().min(0).max(10000).default(0)}).strict().refine(v=> !v.startDate || !v.endDate || v.endDate >= v.startDate,{message:'End date must not precede start date',path:['endDate']}).refine(v=>!(v.percentage!==null&&v.cgpa!==null),{message:'Use percentage or CGPA, not both'});
 export type EducationInput = z.infer<typeof educationSchema>;
 export type EducationEntry = EducationInput & {id:string;createdAt:string;updatedAt:string;source:'user';verified:true};
 export type Career = {profile:Profile; sections:{education:EducationEntry[]}&Record<Exclude<Section,'education'>,Entry[]>; completeness:number};
@@ -23,8 +24,6 @@ export const jobSchema = z.object({title:z.string().trim().min(1).max(200),compa
 export type JobInput = z.infer<typeof jobSchema>;
 export type Job = JobInput & {id:string;createdAt:string};
 export type JobRecommendation = {job:Job;score:number;matchedSkills:string[];missingSkills:string[];reasons:string[]};
-export type ResumeSuggestion = {section:Section;input:EntryInput|EducationInput;excerpt:string;confidence:'high'|'medium'|'low'};
-export type ResumeParseResult = {source:'deterministic'|'gemini'|'openai-compatible'|'apilayer';profile:Partial<Profile>;entries:ResumeSuggestion[];warnings:string[];createdAt:string};
 export type JobSearchResult = {externalId:string;title:string;company:string;location:string;url:string;description:string;source:'serpapi';score:number;matchedSkills:string[]};
 export type Evidence = {id:string;section:Section;label:string;excerpt:string};
 export type Analysis = {id:string;jobId:string;requiredSkills:string[];preferredSkills:string[];responsibilities:string[];qualifications:string[];experienceRequirements:string[];keywords:string[];matchedSkills:string[];missingSkills:string[];evidence:Evidence[];interpretation:string;source:'deterministic'|'provider';createdAt:string};

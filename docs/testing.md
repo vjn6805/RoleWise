@@ -46,7 +46,7 @@ The critical user path drives actual labeled controls and checks real HTTP respo
 
 - Register an active account, sign out, verify protected-route redirect, and sign back in.
 - Save basic profile plus verified skill, experience, and project entries; reload to verify database persistence.
-- Upload and review a real multipart TXT resume containing an unsupported career claim. Check the full verified profile is unchanged by extraction.
+- Upload and review a real multipart TXT resume as raw reference text. Check the full verified profile is unchanged by extraction.
 - Save a job with adversarial employer text and analyze it. Check exact skill matches and that every cited evidence ID belongs to the verified profile.
 - Track the job with an assigned resume version, update stage and notes, and verify stage history.
 - Generate evidence-linked interview questions, save practice notes/completion, and reload them.

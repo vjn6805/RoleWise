@@ -13,7 +13,6 @@ All endpoints below use `/api`. JSON responses are the entity itself (not envelo
 - POST /profile/:section EntryInput -> Entry (201); PUT /profile/:section/:id EntryInput -> Entry; DELETE -> 204. Sections enum from shared. Entries only become verified by explicit user save; resume text never auto imports. Position controls order.
 - GET /resumes -> Resume[]
 - POST /resumes multipart `file`, optional `name`, optional `resumeId` -> ResumeVersion (201). Supported PDF, DOCX, and TXT, 5 MiB. New resume grouping unless resumeId supplied. Extracted text returned untrusted; manual review/copy into profile.
-- POST /resumes/versions/:id/parse -> ResumeParseResult. Uses the configured backend parser (`none`, Gemini, OpenAI-compatible, or APILayer original-file upload); output is always review-only and never mutates profile data. APILayer accepts PDF/DOCX (TXT receives 415) and provider errors return a safe error response rather than an apparent successful fallback.
 - GET /resumes/versions/:id/download -> attachment
 - DELETE /resumes/:id -> 204
 - GET /jobs -> Job[]; POST /jobs JobInput -> Job (201); GET /jobs/:id -> Job; DELETE /jobs/:id -> 204
